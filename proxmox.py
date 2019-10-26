@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
 # Copyright (C) 2014  Mathieu GAUTHIER-LAFAYE <gauthierl@lapth.cnrs.fr>
+# Updated 2016 by Matt Harris <matthaeus.harris@gmail.com>
+# Updated 2019 by John Cardenas <cardenas.john.j@gmail.com>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -185,6 +187,12 @@ class ProxmoxAPI(object):
     def node_openvz_description(self, node, vm):
         return self.vm_description_by_type(node, vm, 'openvz')
 
+    def node_qemu_ip(self, node, vm):
+        try:
+            return self.get('api2/json/nodes/{0}/qemu/{1}/agent/network-get-interfaces'.format(node, vm))
+        except:
+            return False
+
     def pools(self):
         return ProxmoxPoolList(self.get('api2/json/pools'))
 
@@ -196,6 +204,8 @@ class ProxmoxAPI(object):
 
 
 def main_list(options, config_path):
+    qemu_default_interfaces = ["eth0", "ens18", "Ethernet", "Ethernet0"]
+
     results = {
         'all': {
             'hosts': [],
@@ -238,6 +248,11 @@ def main_list(options, config_path):
         # Check only VM/containers from the current node
         for vm in node_hostvars:
             vmid = results['_meta']['hostvars'][vm]['proxmox_vmid']
+            node_ip = proxmox_api.node_qemu_ip(node, vmid)
+            if node_ip:
+                for vm_interface in node_ip['result']:
+                    if vm_interface['name'] in qemu_default_interfaces:
+                        results['_meta']['hostvars'][vm]['ansible_host'] = vm_interface['ip-addresses'][0]['ip-address']
             try:
                 type = results['_meta']['hostvars'][vm]['proxmox_type']
             except KeyError:
